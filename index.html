@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CLT & Dice Simulation</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #f7f7fb;
+      color: #222;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      text-align: center;
+      margin-bottom: 25px;
+      color: #555;
+    }
+
+    .controls {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 25px;
+      flex-wrap: wrap;
+    }
+
+    select,
+    button {
+      padding: 8px 12px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+      cursor: pointer;
+      background: white;
+    }
+
+    button {
+      border: none;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    }
+
+    button.primary {
+      background: #1976d2;
+      color: white;
+    }
+
+    button.secondary {
+      background: #eeeeee;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    .charts-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      justify-content: center;
+    }
+
+    .panel {
+      background: white;
+      padding: 16px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+      flex: 1 1 320px;
+      max-width: 420px;
+    }
+
+    .panel h2 {
+      text-align: center;
+      font-size: 18px;
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
+
+    canvas {
+      width: 100%;
+      height: 240px;
+    }
+
+    .stats {
+      margin-top: 10px;
+      font-size: 13px;
+    }
+
+    .stats table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .stats td {
+      padding: 2px 4px;
+    }
+
+    .stats td.label {
+      font-style: italic;
+      color: #666;
+      width: 35%;
+    }
+
+    .stats td.value {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    @media (max-width: 900px) {
+      canvas {
+        height: 200px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Central Limit Theorem & Dice Simulation</h1>
+  <div class="subtitle">
+    Drag the population bars, sample from your distribution, and explore dice sums.
+  </div>
+
+  <div class="controls">
+    <label for="sampleSize">n = </label>
+    <select id="sampleSize">
+      <option value="5">5</option>
+      <option value="10" selected>10</option>
+      <option value="30">30</option>
+      <option value="50">50</option>
+      <option value="100">100</option>
+    </select>
+
+    <button id="run1" class="primary">Run 1 Sample</button>
+    <button id="run100" class="primary">Run 100 Samples</button>
+    <button id="runMany" class="primary">Run 1000 Samples</button>
+    <button id="reset" class="secondary">Reset Population</button>
+  </div>
+
+  <div class="charts-row">
+    <!-- Population -->
+    <div class="panel">
+      <h2>Population Distribution (drag)</h2>
+      <canvas id="populationChart"></canvas>
+      <div class="stats">
+        <table>
+          <tr><td class="label">Size (N)</td><td class="value" id="pop-size"></td></tr>
+          <tr><td class="label">Mean (μ)</td><td class="value" id="pop-mean"></td></tr>
+          <tr><td class="label">Variance (σ²)</td><td class="value" id="pop-var"></td></tr>
+          <tr><td class="label">SD (σ)</td><td class="value" id="pop-sd"></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Sample -->
+    <div class="panel">
+      <h2>Sample Distribution</h2>
+      <canvas id="sampleChart"></canvas>
+      <div class="stats">
+        <table>
+          <tr><td class="label">Size (n)</td><td class="value" id="sample-size"></td></tr>
+          <tr><td class="label">Mean (x̄)</td><td class="value" id="sample-mean"></td></tr>
+          <tr><td class="label">Variance (s²)</td><td class="value" id="sample-var"></td></tr>
+          <tr><td class="label">SD (s)</td><td class="value" id="sample-sd"></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Sample means -->
+    <div class="panel">
+      <h2>Distribution of Sample Means</h2>
+      <canvas id="meansChart"></canvas>
+      <div class="stats">
+        <table>
+          <tr><td class="label">Size</td><td class="value" id="means-size"></td></tr>
+          <tr><td class="label">Mean (μ<sub>x̄</sub>)</td><td class="value" id="means-mean"></td></tr>
+          <tr><td class="label">Variance</td><td class="value" id="means-var"></td></tr>
+          <tr><td class="label">SD (σ<sub>x̄</sub>)</td><td class="value" id="means-sd"></td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <hr style="margin:30px 0; border:none; border-top:1px solid #ddd;" />
+
+  <!-- Dice simulation panel -->
+  <div class="panel" style="max-width:900px; margin:0 auto 40px;">
+    <h2>Dice Simulation</h2>
+    <div class="controls" style="margin-bottom: 12px; justify-content: flex-start;">
+      <label for="diceCount"># Dice:</label>
+      <select id="diceCount">
+        <option value="1">1</option>
+        <option value="2" selected>2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+      </select>
+
+      <label for="diceSides">Sides:</label>
+      <select id="diceSides">
+        <option value="4">4</option>
+        <option value="6" selected>6</option>
+        <option value="8">8</option>
+        <option value="10">10</option>
+        <option value="12">12</option>
+        <option value="20">20</option>
+      </select>
+
+      <button id="diceRun1" class="primary">Roll 1</button>
+      <button id="diceRun100" class="primary">Roll 100</button>
+      <button id="diceRun1000" class="primary">Roll 1000</button>
+      <button id="diceReset" class="secondary">Reset</button>
+    </div>
+
+    <canvas id="diceChart"></canvas>
+
+    <div class="stats">
+      <table>
+        <tr><td class="label">Rolls</td><td class="value" id="dice-size">0</td></tr>
+        <tr><td class="label">Mean</td><td class="value" id="dice-mean">—</td></tr>
+        <tr><td class="label">Variance</td><td class="value" id="dice-var">—</td></tr>
+        <tr><td class="label">SD</td><td class="value" id="dice-sd">—</td></tr>
+        <tr><td class="label">Min sum</td><td class="value" id="dice-min">—</td></tr>
+        <tr><td class="label">Max sum</td><td class="value" id="dice-max">—</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // ---------- Utility functions ----------
+    function mean(arr) {
+      if (arr.length === 0) return NaN;
+      return arr.reduce((a, b) => a + b, 0) / arr.length;
+    }
+
+    function variance(arr) {
+      if (arr.length <= 1) return NaN;
+      const m = mean(arr);
+      return arr.reduce((s, x) => s + (x - m) ** 2, 0) / (arr.length - 1);
+    }
+
+    function formatNumber(x, decimals = 2) {
+      if (!Number.isFinite(x)) return "—";
+      return x.toFixed(decimals);
+    }
+
+    function buildHistogram(data, numBins, min, max) {
+      const counts = new Array(numBins).fill(0);
+      const width = (max - min) / numBins;
+      data.forEach((v) => {
+        if (v < min || v > max) return;
+        let idx = Math.floor((v - min) / width);
+        if (idx === numBins) idx = numBins - 1;
+        counts[idx]++;
+      });
+      const labels = counts.map((_, i) =>
+        (min + (i + 0.5) * width).toFixed(0)
+      );
+      return { labels, counts };
+    }
+
+    // ---------- Population + sampling state ----------
+    const POP_MIN = 0;
+    const POP_MAX = 400;
+    const NUM_BINS = 30;
+    const POP_SIZE_DEFAULT = 3000;
+    const BIN_WIDTH = (POP_MAX - POP_MIN) / NUM_BINS;
+
+    let population = [];
+    let popBinCounts = [];
+    const sampleMeans = [];
+
+    // precompute bin labels
+    const popLabels = [];
+    for (let i = 0; i < NUM_BINS; i++) {
+      const center = POP_MIN + (i + 0.5) * BIN_WIDTH;
+      popLabels.push(center.toFixed(0));
+    }
+
+    // ---------- Chart setup ----------
+    const popCtx = document.getElementById("populationChart").getContext("2d");
+    const sampleCtx = document.getElementById("sampleChart").getContext("2d");
+    const meansCtx = document.getElementById("meansChart").getContext("2d");
+
+    const populationChart = new Chart(popCtx, {
+      type: "bar",
+      data: {
+        labels: popLabels,
+        datasets: [
+          {
+            label: "Population",
+            data: new Array(NUM_BINS).fill(0)
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: { title: { display: true, text: "Value" } },
+          y: {
+            title: { display: true, text: "Frequency" },
+            beginAtZero: true
+          }
+        },
+        plugins: {
+          legend: { display: false }
+        },
+        animation: false
+      }
+    });
+
+    const sampleChart = new Chart(sampleCtx, {
+      type: "bar",
+      data: {
+        labels: popLabels,
+        datasets: [
+          {
+            label: "Sample",
+            data: new Array(NUM_BINS).fill(0)
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: { title: { display: true, text: "Value" } },
+          y: { title: { display: true, text: "Frequency" }, beginAtZero: true }
+        },
+        plugins: { legend: { display: false } },
+        animation: false
+      }
+    });
+
+    const meansChart = new Chart(meansCtx, {
+      type: "bar",
+      data: {
+        labels: popLabels,
+        datasets: [
+          {
+            label: "Sample Means",
+            data: new Array(NUM_BINS).fill(0)
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: { title: { display: true, text: "Sample Mean" } },
+          y: { title: { display: true, text: "Frequency" }, beginAtZero: true }
+        },
+        plugins: { legend: { display: false } },
+        animation: false
+      }
+    });
+
+    // ---------- Stats DOM elements ----------
+    const popSizeEl = document.getElementById("pop-size");
+    const popMeanEl = document.getElementById("pop-mean");
+    const popVarEl = document.getElementById("pop-var");
+    const popSdEl = document.getElementById("pop-sd");
+
+    const sampleSizeEl = document.getElementById("sample-size");
+    const sampleMeanEl = document.getElementById("sample-mean");
+    const sampleVarEl = document.getElementById("sample-var");
+    const sampleSdEl = document.getElementById("sample-sd");
+
+    const meansSizeEl = document.getElementById("means-size");
+    const meansMeanEl = document.getElementById("means-mean");
+    const meansVarEl = document.getElementById("means-var");
+    const meansSdEl = document.getElementById("means-sd");
+
+    const sampleSizeSelect = document.getElementById("sampleSize");
+
+    // ----- Dice DOM elements -----
+    const diceCountSelect = document.getElementById("diceCount");
+    const diceSidesSelect = document.getElementById("diceSides");
+    const diceSizeEl = document.getElementById("dice-size");
+    const diceMeanEl = document.getElementById("dice-mean");
+    const diceVarEl = document.getElementById("dice-var");
+    const diceSdEl = document.getElementById("dice-sd");
+    const diceMinEl = document.getElementById("dice-min");
+    const diceMaxEl = document.getElementById("dice-max");
+    const diceChartCtx = document.getElementById("diceChart").getContext("2d");
+
+    // ---------- Population helpers ----------
+    function randn() {
+      let u = 0, v = 0;
+      while (u === 0) u = Math.random();
+      while (v === 0) v = Math.random();
+      return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+    }
+
+    function updatePopulationStats() {
+      const N = population.length;
+      const mu = mean(population);
+      const v = variance(population);
+      const sd = Math.sqrt(v);
+
+      popSizeEl.textContent = N;
+      popMeanEl.textContent = formatNumber(mu, 2);
+      popVarEl.textContent = formatNumber(v, 2);
+      popSdEl.textContent = formatNumber(sd, 2);
+    }
+
+    function rebuildPopulationFromBins() {
+      population = [];
+      for (let i = 0; i < NUM_BINS; i++) {
+        const count = Math.max(0, Math.round(popBinCounts[i]));
+        const center = POP_MIN + (i + 0.5) * BIN_WIDTH;
+        for (let j = 0; j < count; j++) {
+          population.push(center);
+        }
+      }
+      updatePopulationStats();
+      resetSamples();
+    }
+
+    function initializePopulation() {
+      population = [];
+      for (let i = 0; i < POP_SIZE_DEFAULT; i++) {
+        const x = 200 + 70 * randn();
+        const clipped = Math.max(POP_MIN, Math.min(POP_MAX, x));
+        population.push(clipped);
+      }
+      const hist = buildHistogram(population, NUM_BINS, POP_MIN, POP_MAX);
+      popBinCounts = hist.counts.slice();
+      populationChart.data.datasets[0].data = popBinCounts;
+      populationChart.update("none");
+      updatePopulationStats();
+      resetSamples();
+    }
+
+    // ---------- Sampling logic ----------
+    function takeSample(n) {
+      if (population.length === 0) return [];
+      const sample = [];
+      for (let i = 0; i < n; i++) {
+        const idx = Math.floor(Math.random() * population.length);
+        sample.push(population[idx]);
+      }
+      return sample;
+    }
+
+    function updateSampleChart(sample) {
+      const hist = buildHistogram(sample, NUM_BINS, POP_MIN, POP_MAX);
+      sampleChart.data.datasets[0].data = hist.counts;
+      sampleChart.update("none");
+
+      const m = mean(sample);
+      const v = variance(sample);
+      const s = Math.sqrt(v);
+
+      sampleSizeEl.textContent = sample.length;
+      sampleMeanEl.textContent = formatNumber(m, 2);
+      sampleVarEl.textContent = formatNumber(v, 2);
+      sampleSdEl.textContent = formatNumber(s, 2);
+    }
+
+    function updateMeansChart() {
+      const hist = buildHistogram(sampleMeans, NUM_BINS, POP_MIN, POP_MAX);
+      meansChart.data.datasets[0].data = hist.counts;
+      meansChart.update("none");
+
+      const m = mean(sampleMeans);
+      const v = variance(sampleMeans);
+      const s = Math.sqrt(v);
+
+      meansSizeEl.textContent = sampleMeans.length;
+      meansMeanEl.textContent = formatNumber(m, 2);
+      meansVarEl.textContent = formatNumber(v, 4);
+      meansSdEl.textContent = formatNumber(s, 4);
+    }
+
+    function runOneSample() {
+      const n = parseInt(sampleSizeSelect.value, 10);
+      const sample = takeSample(n);
+      if (sample.length === 0) return;
+      const m = mean(sample);
+      sampleMeans.push(m);
+      updateSampleChart(sample);
+      updateMeansChart();
+    }
+
+    function runManySamples(times) {
+      const n = parseInt(sampleSizeSelect.value, 10);
+      for (let i = 0; i < times; i++) {
+        const sample = takeSample(n);
+        if (sample.length === 0) return;
+        const m = mean(sample);
+        sampleMeans.push(m);
+        if (i === times - 1) {
+          updateSampleChart(sample);
+        }
+      }
+      updateMeansChart();
+    }
+
+    function resetSamples() {
+      sampleMeans.length = 0;
+
+      sampleChart.data.datasets[0].data = new Array(NUM_BINS).fill(0);
+      sampleChart.update("none");
+      meansChart.data.datasets[0].data = new Array(NUM_BINS).fill(0);
+      meansChart.update("none");
+
+      sampleSizeEl.textContent = "0";
+      sampleMeanEl.textContent = "—";
+      sampleVarEl.textContent = "—";
+      sampleSdEl.textContent = "—";
+
+      meansSizeEl.textContent = "0";
+      meansMeanEl.textContent = "—";
+      meansVarEl.textContent = "—";
+      meansSdEl.textContent = "—";
+    }
+
+    // ---------- Drag-to-reshape interaction ----------
+    const popCanvas = document.getElementById("populationChart");
+    let isDragging = false;
+    let dragIndex = null;
+
+    function setBarHeightFromEvent(e) {
+      if (dragIndex === null) return;
+      const yScale = populationChart.scales.y;
+      const rect = popCanvas.getBoundingClientRect();
+      const yPixel = e.clientY - rect.top;
+
+      let value = yScale.getValueForPixel(yPixel);
+      if (!Number.isFinite(value)) return;
+
+      value = Math.max(0, value);
+      popBinCounts[dragIndex] = value;
+      populationChart.data.datasets[0].data = popBinCounts;
+      populationChart.update("none");
+    }
+
+    popCanvas.addEventListener("pointerdown", (e) => {
+      const elements = populationChart.getElementsAtEventForMode(
+        e,
+        "nearest",
+        { intersect: true },
+        true
+      );
+      if (!elements.length) return;
+      isDragging = true;
+      dragIndex = elements[0].index;
+      setBarHeightFromEvent(e);
+    });
+
+    window.addEventListener("pointermove", (e) => {
+      if (!isDragging) return;
+      setBarHeightFromEvent(e);
+    });
+
+    function finishDrag() {
+      if (!isDragging) return;
+      isDragging = false;
+      dragIndex = null;
+      rebuildPopulationFromBins();
+    }
+
+    window.addEventListener("pointerup", finishDrag);
+    window.addEventListener("pointerleave", finishDrag);
+
+    // ---------- Dice simulation state ----------
+    let diceResults = [];
+    let diceCounts = [];
+    let diceMinSum = 0;
+    let diceMaxSum = 0;
+    let diceChart = null;
+
+    function setupDiceChart() {
+      const numDice = parseInt(diceCountSelect.value, 10);
+      const numSides = parseInt(diceSidesSelect.value, 10);
+
+      diceMinSum = numDice;
+      diceMaxSum = numDice * numSides;
+      const numBins = diceMaxSum - diceMinSum + 1;
+
+      diceCounts = new Array(numBins).fill(0);
+
+      const labels = [];
+      for (let s = diceMinSum; s <= diceMaxSum; s++) {
+        labels.push(String(s));
+      }
+
+      if (diceChart) {
+        diceChart.destroy();
+      }
+
+      diceChart = new Chart(diceChartCtx, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "Sum of dice",
+              data: diceCounts
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: { title: { display: true, text: "Sum" } },
+            y: { title: { display: true, text: "Frequency" }, beginAtZero: true }
+          },
+          plugins: { legend: { display: false } },
+          animation: false
+        }
+      });
+
+      diceResults = [];
+      updateDiceStats();
+    }
+
+    function updateDiceStats() {
+      const n = diceResults.length;
+      diceSizeEl.textContent = n;
+
+      if (n === 0) {
+        diceMeanEl.textContent = "—";
+        diceVarEl.textContent = "—";
+        diceSdEl.textContent = "—";
+        diceMinEl.textContent = "—";
+        diceMaxEl.textContent = "—";
+        return;
+      }
+
+      const m = mean(diceResults);
+      const v = variance(diceResults);
+      const s = Math.sqrt(v);
+
+      diceMeanEl.textContent = formatNumber(m, 3);
+      diceVarEl.textContent = formatNumber(v, 3);
+      diceSdEl.textContent = formatNumber(s, 3);
+      diceMinEl.textContent = Math.min(...diceResults);
+      diceMaxEl.textContent = Math.max(...diceResults);
+    }
+
+    function rollDiceOnce(numDice, numSides) {
+      let sum = 0;
+      for (let i = 0; i < numDice; i++) {
+        sum += 1 + Math.floor(Math.random() * numSides);
+      }
+      return sum;
+    }
+
+    function runDice(times) {
+      const numDice = parseInt(diceCountSelect.value, 10);
+      const numSides = parseInt(diceSidesSelect.value, 10);
+
+      for (let t = 0; t < times; t++) {
+        const sum = rollDiceOnce(numDice, numSides);
+        diceResults.push(sum);
+        const idx = sum - diceMinSum;
+        if (idx >= 0 && idx < diceCounts.length) {
+          diceCounts[idx] += 1;
+        }
+      }
+
+      diceChart.data.datasets[0].data = diceCounts;
+      diceChart.update("none");
+      updateDiceStats();
+    }
+
+    function resetDice() {
+      setupDiceChart();
+    }
+
+    // ---------- Button wiring ----------
+    document.getElementById("run1").addEventListener("click", () => {
+      runOneSample();
+    });
+
+    document.getElementById("run100").addEventListener("click", () => {
+      runManySamples(100);
+    });
+
+    document.getElementById("runMany").addEventListener("click", () => {
+      runManySamples(1000);
+    });
+
+    document.getElementById("reset").addEventListener("click", () => {
+      initializePopulation();
+    });
+
+    // Dice control wiring
+    diceCountSelect.addEventListener("change", setupDiceChart);
+    diceSidesSelect.addEventListener("change", setupDiceChart);
+
+    document.getElementById("diceRun1").addEventListener("click", () => {
+      runDice(1);
+    });
+    document.getElementById("diceRun100").addEventListener("click", () => {
+      runDice(100);
+    });
+    document.getElementById("diceRun1000").addEventListener("click", () => {
+      runDice(1000);
+    });
+    document.getElementById("diceReset").addEventListener("click", () => {
+      resetDice();
+    });
+
+    // ---------- Initial load ----------
+    initializePopulation();
+    setupDiceChart();
+  </script>
+</body>
+</html>
